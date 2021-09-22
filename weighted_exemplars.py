@@ -1,9 +1,8 @@
 import autograd.numpy as np
 from autograd import grad
 from scipy.optimize import minimize
-import pdb
 from scipy.special import logsumexp
-import pdb
+import sys
 import time
 
 
@@ -22,8 +21,7 @@ def calculate_mmd(K, X_inds, Y_inds, Y_weights=None, XX_part=None):
         XX_part = np.sum(Kxx)/(N**2)
     else:
         XX_part_tmp = np.sum(Kxx)/(N**2)
-        if XX_part != XX_part_tmp:
-            pdb.set_trace()
+        
     if Y_weights is None:
         M = len(Y_inds)
         YY_part = np.sum(Kyy)/(M**2)
@@ -342,3 +340,61 @@ def protodash(K, targets, time_limit=None,  M=None, MMD_threshold=None, candidat
         return exemplars, weights, mmds, times
     return exemplars, weights
     
+
+
+def select_criticism_regularized(K, target, selectedprotos, selectedweights, m, reg='logdet'):
+    """
+    This code is from Kim, Khanna and Koyejo, Examples are not Enough, Learn to Criticize! Criticism for Interpretability
+    See: https://github.com/BeenKim/MMD-critic
+    """
+
+    n = len(target)
+
+    options = dict()
+
+    selected = np.array([], dtype=int)
+    candidates2 = np.setdiff1d(target, selectedprotos)
+    inverse_of_prev_selected = None  # should be a matrix
+
+    colsum = np.sum(K[target, :], axis=0)/n
+
+    for i in range(m):
+        maxx = -sys.float_info.max
+        argmax = -1
+        candidates = np.setdiff1d(candidates2, selected)
+
+        s1array = colsum[candidates]
+
+        temp = K[selectedprotos, :][:, candidates]
+        for j in range(len(selectedprotos)):
+            temp[j, :] = temp[j, :]*selectedweights[j]
+        s2array = np.sum(temp, axis=0)
+
+        
+        #s2array = s2array / (len(selectedprotos))
+
+        s1array = np.abs(s1array - s2array)
+        if reg == 'logdet':
+            if inverse_of_prev_selected is not None: # first call has been made already
+                temp = K[selected, :][:, candidates]
+                # hadamard product
+                temp2 = np.array(np.dot(inverse_of_prev_selected, temp))
+                regularizer = temp2 * temp
+                regcolsum = np.sum(regularizer, axis=0)
+                regularizer = np.log(np.abs(np.diagonal(K)[candidates] - regcolsum))
+                s1array = s1array + regularizer
+            else:
+                s1array = s1array - np.log(np.abs(np.diagonal(K)[candidates]))
+        argmax = candidates[np.argmax(s1array)]
+        maxx = np.max(s1array)
+
+        selected = np.append(selected, argmax)
+        if reg == 'logdet':
+            KK = K[selected,:][:,selected]
+            
+
+            inverse_of_prev_selected = np.linalg.inv(KK) # shortcut
+        if reg == 'iterative':
+            selectedprotos = np.append(selectedprotos, argmax)
+
+    return selected
