@@ -174,22 +174,18 @@ def weighted_exemplars(K, targets, M=None, time_limit=None, MMD_threshold=None, 
         exemplars = np.append(exemplars, candidates[new_ind])
         
         for t in range(len(targets)):
-            if optimal_weights:
-                if np.isnan(ww[t][new_ind]):
-                    pdb.set_trace()
-                weights[t] = np.append(weights[t], ww[t][new_ind])
-                weights[t] = weights[t]/ np.sum(weights[t])
-            else:
-                weights[t] = np.append(weights[t], 1)
-                weights[t] = weights[t]/np.sum(weights[t])
-                relearn_weights=True
+            if np.isnan(ww[t][new_ind]):
+                pdb.set_trace()
+            weights[t] = np.append(weights[t], ww[t][new_ind])
+            weights[t] = weights[t]/ np.sum(weights[t])
+            
 
         if relearn_weights:
             for t in range(len(targets)):
                 weights[t] = np.maximum(weights[t], 0.0001)
                 if np.any(np.isnan(weights[t])):
                     pdb.set_trace()
-                weights[t] = improve_weights(K, targets[t], exemplars, weights[t], normalize=normalize)
+                weights[t] = improve_weights(K, targets[t], exemplars, weights[t], normalize=True)
         if MMD_threshold is not None:
             for t in range(num_targets):
                 if targets_to_include[t]:
